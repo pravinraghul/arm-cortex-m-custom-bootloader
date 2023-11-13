@@ -1,0 +1,5 @@
+device STM32F429ZI
+si 1
+speed 4000
+loadbin build/f429-boot.bin,0x08000000
+exit
