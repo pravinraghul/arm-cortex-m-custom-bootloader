@@ -196,9 +196,55 @@ void normal_boot(void)
   boot_goto_app();
 }
 
-void bootloader_mode(void)
+void boot_newapp(void)
 {
   int ret = 0;
+
+  // validate the application binary
+  ret = boot_validate_tempslot_bin(BOOT_TEMPSLOT1);
+  if (ret == -1) {
+    SEGGER_RTT_printf(0, "bootloader mode: validation failed, bootloader halt...!\r\n");
+    while(1); // unlimited wait
+  }
+
+  boot_load_bin_to_appslot(BOOT_TEMPSLOT1);
+
+  ret = boot_validate_appslot_bin();
+  if (ret == -1) {
+    SEGGER_RTT_printf(0, "bootloader mode: failed to load application, bootloader halt...!");
+    while (1); // unlimited wait
+  }
+
+  SEGGER_RTT_printf(0, "bootloader mode: validation successful\r\n");
+  // jump to application slot
+  boot_goto_app();
+}
+
+void write_app_config(sbp_handle_t *sbp_handle)
+{
+  uint8_t version[8] = {0};
+
+  memcpy(version, (uint8_t*)&sbp_handle->config.version, 4);
+  SEGGER_RTT_printf(0, "bootloader mode: application version: ");
+  SEGGER_RTT_printf(0, "%d.", version[0]);
+  SEGGER_RTT_printf(0, "%d.", version[1]);
+  SEGGER_RTT_printf(0, "%d",  version[2]);
+  SEGGER_RTT_printf(0, "\r\n");
+  SEGGER_RTT_printf(0, "bootloader mode: application size: %ld\r\n", sbp_handle->config.size);
+
+  boot_write_config_version(sbp_handle->config.version);
+  boot_write_config_size(sbp_handle->config.size);
+  boot_write_config_crc(sbp_handle->config.crc);
+  boot_write_config_slotno(BOOT_TEMPSLOT1);
+}
+
+void write_app_bin(sbp_handle_t *sbp_handle)
+{
+  boot_write_bin_to_tempslot(BOOT_TEMPSLOT1, sbp_handle->data.bytes, sbp_handle->data.size);
+}
+
+void bootloader_mode(void)
+{
   sbp_handle_t sbp_handle;
 
   // Enter into the bootloader mode
@@ -209,47 +255,22 @@ void bootloader_mode(void)
   while (1) {
     proto_receive_packet(&sbp_handle);
 
-    if (sbp_handle.config_packet_received) {
-      uint8_t version[8] = {0};
+    switch (sbp_handle.state) {
 
-      memcpy(version, (uint8_t*)&sbp_handle.config.version, 4);
-      SEGGER_RTT_printf(0, "bootloader mode: application version: ");
-      SEGGER_RTT_printf(0, "%d.", version[0]);
-      SEGGER_RTT_printf(0, "%d.", version[1]);
-      SEGGER_RTT_printf(0, "%d",  version[2]);
-      SEGGER_RTT_printf(0, "\r\n");
-      SEGGER_RTT_printf(0, "bootloader mode: application size: %ld\r\n", sbp_handle.config.size);
+      case STATE_RESET:
+        break;
+      case STATE_DOWNLOAD_START:
+        break;
+      case STATE_DOWNLOAD_COMPLETE:
+        boot_newapp();
+        break;
+      case STATE_CONF_PACKET_RECEIVED:
+        write_app_config(&sbp_handle);
+        break;
+      case STATE_DATA_PACKET_RECEIVED:
+        write_app_bin(&sbp_handle);
+        break;
 
-      boot_write_config_version(sbp_handle.config.version);
-      boot_write_config_size(sbp_handle.config.size);
-      boot_write_config_crc(sbp_handle.config.crc);
-      boot_write_config_slotno(BOOT_TEMPSLOT1);
-    }
-
-    if (sbp_handle.app_packet_received) {
-      boot_write_bin_to_tempslot(BOOT_TEMPSLOT1, sbp_handle.data.bytes, sbp_handle.data.size);
-    }
-
-    if (sbp_handle.app_packet_complete) {
-
-      // validate the application binary
-      ret = boot_validate_tempslot_bin(BOOT_TEMPSLOT1);
-      if (ret == -1) {
-        SEGGER_RTT_printf(0, "bootloader mode: validation failed, bootloader halt...!\r\n");
-        while(1); // unlimited wait
-      }
-
-      boot_load_bin_to_appslot(BOOT_TEMPSLOT1);
-
-      ret = boot_validate_appslot_bin();
-      if (ret == -1) {
-        SEGGER_RTT_printf(0, "bootloader mode: failed to load application, bootloader halt...!");
-        while (1); // unlimited wait
-      }
-
-      SEGGER_RTT_printf(0, "bootloader mode: validation successful\r\n");
-      // jump to application slot
-      boot_goto_app();
     }
   }
 }

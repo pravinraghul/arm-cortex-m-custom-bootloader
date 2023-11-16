@@ -3,6 +3,14 @@
 
 #include "main.h"
 
+enum proto_state_t {
+STATE_RESET,
+STATE_DOWNLOAD_START,
+STATE_CONF_PACKET_RECEIVED,
+STATE_DATA_PACKET_RECEIVED,
+STATE_DOWNLOAD_COMPLETE
+};
+
 typedef struct {
     uint32_t version;
     uint32_t size;
@@ -17,9 +25,7 @@ typedef struct {
 typedef struct {
     sbp_config_t config;
     sbp_data_t data;
-    bool config_packet_received;
-    bool app_packet_received;
-    bool app_packet_complete;
+    enum proto_state_t state;
 } sbp_handle_t;
 
 /* receives command and data packets and sends response packets */

@@ -190,10 +190,7 @@ int proto_receive_packet(sbp_handle_t *handle)
     memset(handle->data.bytes, 0, 1024);
     handle->data.size = 0;
 
-    // clear all the flags
-    handle->app_packet_received = false;
-    handle->app_packet_complete = false;
-    handle->config_packet_received = false;
+    handle->state = STATE_RESET;
 
     if (proto_receive_packet_header(header) != 0) {
         SEGGER_RTT_printf(0, "proto_receive_packet: header receive failed \r\n");
@@ -211,6 +208,7 @@ int proto_receive_packet(sbp_handle_t *handle)
                 proto_transmit_packet_resp(SBP_RESP_NACK);
                 return -1;
             }
+            handle->state = STATE_DOWNLOAD_START;
             break;
         case SBP_TYPE_STOP:
             SEGGER_RTT_printf(0, "proto_receive_packet: stop packet type received \r\n");
@@ -219,7 +217,7 @@ int proto_receive_packet(sbp_handle_t *handle)
                 proto_transmit_packet_resp(SBP_RESP_NACK);
                 return -1;
             }
-            handle->app_packet_complete = true;
+            handle->state = STATE_DOWNLOAD_COMPLETE;
             break;
         case SBP_TYPE_CONF:
             SEGGER_RTT_printf(0, "proto_receive_packet: config packet type received \r\n");
@@ -228,7 +226,7 @@ int proto_receive_packet(sbp_handle_t *handle)
                 proto_transmit_packet_resp(SBP_RESP_NACK);
                 return -1;
             }
-            handle->config_packet_received = true;
+            handle->state = STATE_CONF_PACKET_RECEIVED;
             break;
         case SBP_TYPE_DATA:
             SEGGER_RTT_printf(0, "proto_receive_packet: data packet type received \r\n");
@@ -237,7 +235,7 @@ int proto_receive_packet(sbp_handle_t *handle)
                 proto_transmit_packet_resp(SBP_RESP_NACK);
                 return -1;
             }
-            handle->app_packet_received = true;
+            handle->state = STATE_DATA_PACKET_RECEIVED;
             break;
     }
 
